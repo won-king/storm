@@ -4,6 +4,7 @@ import bolts.WordNormalizer;
 import org.apache.storm.Config;
 import org.apache.storm.LocalCluster;
 import org.apache.storm.topology.TopologyBuilder;
+import org.apache.storm.trident.topology.TridentTopologyBuilder;
 import org.apache.storm.tuple.Fields;
 import org.apache.storm.utils.Utils;
 import spouts.WordReader;
@@ -28,14 +29,19 @@ public class TopologyMain{
         //TopologyBuilder提供流式风格的API来定义topology组件之间的数据流
         TopologyBuilder builder = new TopologyBuilder();
 
+        //支持事务的计算拓扑
+        //TridentTopologyBuilder builder1=new TridentTopologyBuilder();
+
         //注册一个sentence spout,设置两个Executeor(线程)，默认一个
-        builder.setSpout(SENTENCE_SPOUT_ID, spout,2);
+        builder.setSpout(SENTENCE_SPOUT_ID, spout,1);
 
         //注册一个bolt并订阅sentence发射出的数据流，shuffleGrouping方法告诉Storm要将SentenceSpout发射的tuple随机均匀的分发给SplitSentenceBolt的实例
         //builder.setBolt(SPLIT_BOLT_ID, splitBolt).shuffleGrouping(SENTENCE_SPOUT_ID);
 
         //SplitSentenceBolt单词分割器设置4个Task，2个Executeor(线程)
-        builder.setBolt(SPLIT_BOLT_ID, splitBolt,2).setNumTasks(4).shuffleGrouping(SENTENCE_SPOUT_ID);
+        //之前的想法错了，这里还是设置了几个numTasks，实际就会创建几个task对象，parallelism是多少，就会创建多少个executor
+        // 但是如果numTasks<parallelism_hint，则多出来的executor会空闲
+        builder.setBolt(SPLIT_BOLT_ID, splitBolt,2).setNumTasks(2).shuffleGrouping(SENTENCE_SPOUT_ID);
 
         // SplitSentenceBolt --> WordCountBolt
 
@@ -44,7 +50,8 @@ public class TopologyMain{
         //builder.setBolt(COUNT_BOLT_ID, countBolt).fieldsGrouping( SPLIT_BOLT_ID, new Fields("word"));
 
         //WordCountBolt单词计数器设置4个Executeor(线程)
-        builder.setBolt(COUNT_BOLT_ID, countBolt,4).fieldsGrouping( SPLIT_BOLT_ID, new Fields("word"));
+        //如果把拓扑看成一个树形结构，那么当storm创建拓扑结构节点的时候，是从最底层的孩子节点开始创建的，从他们的id就可以看出来
+        builder.setBolt(COUNT_BOLT_ID, countBolt,2).fieldsGrouping( SPLIT_BOLT_ID, new Fields("word"));
 
         // WordCountBolt --> ReportBolt
 
