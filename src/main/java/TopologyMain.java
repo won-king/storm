@@ -10,6 +10,22 @@ import spouts.WordReader;
 
 /**
  * Created by kewangk on 2018/2/8.
+ * storm并发度的理解：
+ * 一个topology可以跑在多个worker上(worker其实就是一个进程，也可以说是一台机器)，一个worker只能对应于一个topology
+ * 一个worker可以包含多个executor，executor其实就是线程，一个executor至少对应于一个component，
+ *     一个component可以被多个executor共享，但是必须保证component数量不小于并行度，也就是executor的数量
+ *     如果设置的taskNum<parallelism，则实际创建executor时，数量以taskNum为准
+ *     之前理解的是错误的，说当taskNum<parallelism时，实际创建出来的taskNum以parallelism为准，这个是错误的
+ *     其实就是一个以哪个参数为优先的问题，答案是taskNum。
+ *     我们说的可以在不重启拓扑的情况下动态修改计算拓扑的并行度，也只能是修改parallelism的值，taskNum在代码中一旦定了，就不能改了
+ * task就是具体的计算逻辑对象(可以理解为一个runnable对象)
+ * 一般默认，一个executor只执行一个task，即并发度和numTask是1:1的关系
+ *
+ * 在实际应用中，一个component可能不仅需要关心自己数据源有哪些，还需要关心自己的订阅者有哪些
+ * 因为有时候，你需要自定义某些tuple发往哪些component，这时候就需要知道你的消息订阅者的component数量，通过指定下标控制
+ *
+ * 还有一点要注意：如果bolt实现IRichBolt采用了自动确认机制，那么最好不要在业务逻辑中做非常耗时的操作，更不要做失败重试等
+ *   因为自动确认会有超时时间的，超时则认为消息失败，会重发，而如果超时后，消息被成功处理了，重发后的再处理一遍，就会导致重复计算
  */
 public class TopologyMain{
     private static final String SENTENCE_SPOUT_ID = "sentence-spout";
@@ -29,13 +45,18 @@ public class TopologyMain{
         TopologyBuilder builder = new TopologyBuilder();
 
         //注册一个sentence spout,设置两个Executeor(线程)，默认一个
-        builder.setSpout(SENTENCE_SPOUT_ID, spout,2);
+        //这里如果把spout的并发度设为2，实际上就会有2个spout对象，相当于有两个数据源在发射数据，造成统计出来的结果都是2倍的
+        builder.setSpout(SENTENCE_SPOUT_ID, spout,1);
 
         //注册一个bolt并订阅sentence发射出的数据流，shuffleGrouping方法告诉Storm要将SentenceSpout发射的tuple随机均匀的分发给SplitSentenceBolt的实例
         //builder.setBolt(SPLIT_BOLT_ID, splitBolt).shuffleGrouping(SENTENCE_SPOUT_ID);
 
         //SplitSentenceBolt单词分割器设置4个Task，2个Executeor(线程)
-        builder.setBolt(SPLIT_BOLT_ID, splitBolt,2).setNumTasks(4).shuffleGrouping(SENTENCE_SPOUT_ID);
+        //如果并发度>numTask，则实际创建拓扑结构时，executor的数量为numTask
+        //也就是说numTask是设置并发度的上限，parallelism是设置并发度的下限，
+        // 大多数情况下，我们应该保证上限>=下限
+        // 但是如果某个新手程序员不知道这种约定，设成了下限 > 上限，那么实际创建executor时，数量与下限保持一致，不会多创建线程
+        builder.setBolt(SPLIT_BOLT_ID, splitBolt,4).setNumTasks(2).shuffleGrouping(SENTENCE_SPOUT_ID);
 
         // SplitSentenceBolt --> WordCountBolt
 
@@ -44,7 +65,10 @@ public class TopologyMain{
         //builder.setBolt(COUNT_BOLT_ID, countBolt).fieldsGrouping( SPLIT_BOLT_ID, new Fields("word"));
 
         //WordCountBolt单词计数器设置4个Executeor(线程)
-        builder.setBolt(COUNT_BOLT_ID, countBolt,4).fieldsGrouping( SPLIT_BOLT_ID, new Fields("word"));
+        //allGrouping用于订阅spout发射的信号消息，从而触发相应的动作
+        builder.setBolt(COUNT_BOLT_ID, countBolt,4)
+                .fieldsGrouping(SPLIT_BOLT_ID, new Fields("word"))
+                .allGrouping(SENTENCE_SPOUT_ID, WordReader.SIGNAL);
 
         // WordCountBolt --> ReportBolt
 
@@ -60,7 +84,7 @@ public class TopologyMain{
         //本地提交
         cluster.submitTopology(TOPOLOGY_NAME, config, builder.createTopology());
 
-        Utils.sleep(3000);
+        Utils.sleep(10000);
         cluster.killTopology(TOPOLOGY_NAME);
         cluster.shutdown();
 

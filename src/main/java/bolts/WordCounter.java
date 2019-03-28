@@ -7,8 +7,11 @@ import org.apache.storm.topology.base.BaseRichBolt;
 import org.apache.storm.tuple.Fields;
 import org.apache.storm.tuple.Tuple;
 import org.apache.storm.tuple.Values;
+import spouts.WordReader;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -17,21 +20,49 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class WordCounter extends BaseRichBolt{
     private OutputCollector outputCollector;
-    private Map<String,AtomicInteger> count;
+    private Map<String,Integer> count;
+    private int taskId;
 
+    private List<Tuple> batchAnchor=new ArrayList<>(5);
 
     public void prepare(Map map, TopologyContext topologyContext, OutputCollector outputCollector) {
         this.outputCollector=outputCollector;
         count=new HashMap<>();
+        taskId=topologyContext.getThisTaskId();
     }
 
     public void execute(Tuple tuple) {
+
+        //如果是flush信号，则执行flush信号的逻辑
+        if(WordReader.SIGNAL.equals(tuple.getSourceStreamId())){
+            String signal=tuple.getStringByField(WordReader.SIGNAL);
+            System.out.println("[signal ] command->"+signal+" taskId->"+taskId);
+            //outputCollector.emit(batchAnchor, new Values(s,a));
+            //outputCollector.ack(tuple);
+            //batchAnchor.clear();
+            return;
+        }
+
         String s=tuple.getStringByField("word");
-        AtomicInteger c=count.get(s);
-        int nc=c==null? 0 : c.incrementAndGet();
-        AtomicInteger a=new AtomicInteger(nc);
+        Integer a=count.get(s);
+        a= a==null ? 1:a+1;
         count.put(s, a);
-        outputCollector.emit(new Values(s,a.get()));
+        //outputCollector.emit(tuple, new Values(s,a));
+        //outputCollector.ack(tuple);
+
+        if(batchAnchor.size()==5){
+            //这是对数据进行聚合的手法，即积累一个批次的数据后，对其进行reduce操作，聚合成一条数据
+            //这个例子可能不太合适，因为这里没有涉及到对批次数据进行聚合的操作
+            outputCollector.emit(batchAnchor, new Values(s,a));
+            //这里还需要对批次的所有tuple进行ack
+            for(Tuple tuple1:batchAnchor){
+                outputCollector.ack(tuple1);
+            }
+            batchAnchor.clear();
+        }else {
+            batchAnchor.add(tuple);
+        }
+
     }
 
     public void declareOutputFields(OutputFieldsDeclarer outputFieldsDeclarer) {

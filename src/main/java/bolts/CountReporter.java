@@ -14,10 +14,12 @@ import java.util.Map;
  */
 public class CountReporter extends BaseRichBolt {
     private Map<String,Integer> result;
+    private OutputCollector outputCollector;
 
     @Override
     public void prepare(Map map, TopologyContext topologyContext, OutputCollector outputCollector) {
         result=new HashMap<>();
+        this.outputCollector=outputCollector;
     }
 
     @Override
@@ -25,7 +27,15 @@ public class CountReporter extends BaseRichBolt {
         String word=tuple.getStringByField("word");
         Integer num=tuple.getIntegerByField("count");
         result.put(word,num);
-        System.out.println(result);
+        outputCollector.ack(tuple);
+        System.out.println("[reporter] current->"+word);
+        /*if("finger".equals(word)){
+            System.out.println("finger will be resend");
+            outputCollector.fail(tuple);
+        }else {
+            outputCollector.ack(tuple);
+        }*/
+        //System.out.println(result);
     }
 
     @Override
