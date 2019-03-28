@@ -33,19 +33,19 @@ public class WordReader extends BaseRichSpout {
 
     public void nextTuple() {
         //发射单词句子
-        /*spoutOutputCollector.emit(new Values(sentences[index++]));
         if(index>=sentences.length){
-            index=0;
+            return;
         }
-        Utils.sleep(1);*/
+        spoutOutputCollector.emit(new Values(sentences[index++]));
+        Utils.sleep(1);
 
         //发射自然数序列
-        if(integer.intValue()>THRESHOLD){
+        /*if(integer.intValue()>THRESHOLD){
             this.close();
             spoutOutputCollector.emit("signal",new Values(0));
             return;
         }
-        spoutOutputCollector.emit(new Values(integer.incrementAndGet(), integer.incrementAndGet()));
+        spoutOutputCollector.emit(new Values(integer.incrementAndGet(), integer.incrementAndGet()));*/
         /*if(integer.intValue()%2==0){
             spoutOutputCollector.emit("even",new Values(integer.incrementAndGet()));
         }else {
@@ -55,10 +55,10 @@ public class WordReader extends BaseRichSpout {
     }
 
     public void declareOutputFields(OutputFieldsDeclarer outputFieldsDeclarer) {
-        //outputFieldsDeclarer.declare(new Fields("sentence"));
+        outputFieldsDeclarer.declare(new Fields("sentence"));
         //outputFieldsDeclarer.declare(new Fields("number"));
-        outputFieldsDeclarer.declare(new Fields("odd","even"));
-        outputFieldsDeclarer.declareStream("signal", new Fields("stopped"));
+        //outputFieldsDeclarer.declare(new Fields("odd","even"));
+        //outputFieldsDeclarer.declareStream("signal", new Fields("stopped"));
         //outputFieldsDeclarer.declareStream("even",new Fields("number"));
         //outputFieldsDeclarer.declareStream("odd",new Fields("number"));
         //outputFieldsDeclarer.declareStream("signal", new Fields("stopped"));
