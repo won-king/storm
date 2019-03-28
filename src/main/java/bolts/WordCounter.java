@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -29,6 +30,17 @@ public class WordCounter extends BaseRichBolt{
         this.outputCollector=outputCollector;
         count=new HashMap<>();
         taskId=topologyContext.getThisTaskId();
+        int taskNum=topologyContext.getComponentTasks("count-bolt").size();
+        Map<Integer,String> taskToComponent=topologyContext.getTaskToComponent();
+        String componentId=topologyContext.getThisComponentId();
+        int taskId=topologyContext.getThisTaskId();
+        Set<String> streams= topologyContext.getThisStreams();
+        List<Integer> tasks= topologyContext.getThisWorkerTasks();
+        String desc=String.format("streams->%s, tasks->%s, componentId->%s, taskComponent->%s, taskId->%d",
+                streams.toString(), tasks.toString(), componentId, taskToComponent.toString(), taskId);
+        System.out.println(desc);
+        System.out.println("-----componentId->"+topologyContext.getThisComponentId()+
+                " taskId->"+topologyContext.getThisTaskId()+" taskNum->"+taskNum+"-----");
     }
 
     public void execute(Tuple tuple) {

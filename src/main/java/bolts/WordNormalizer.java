@@ -21,17 +21,21 @@ public class WordNormalizer extends BaseRichBolt {
 
     public void prepare(Map map, TopologyContext topologyContext, OutputCollector outputCollector) {
         this.outputCollector=outputCollector;
-        List<Integer> tasks=topologyContext.getThisWorkerTasks();
-        Set<String> components=topologyContext.getComponentIds();
-        Map<Integer,String> taskToComp=topologyContext.getTaskToComponent();
-        String desc=String.format("component->%s, taskToComp->%s, tasks->%s, taskSize->%d",
-                components, taskToComp, tasks, tasks.size());
-        System.out.println(desc);
 
         //本task对象信息
         int taskId=topologyContext.getThisTaskId();
         String self=String.format("-------taskId->%d-------", taskId);
         System.out.println(self);
+        int taskNum=topologyContext.getComponentTasks("split-bolt").size();
+        Map<Integer,String> taskToComponent=topologyContext.getTaskToComponent();
+        String componentId=topologyContext.getThisComponentId();
+        Set<String> streams= topologyContext.getThisStreams();
+        List<Integer> tasks= topologyContext.getThisWorkerTasks();
+        String desc=String.format("streams->%s, tasks->%s, componentId->%s, taskComponent->%s, taskId->%d",
+                streams.toString(), tasks.toString(), componentId, taskToComponent.toString(), taskId);
+        System.out.println(desc);
+        System.out.println("-----componentId->"+topologyContext.getThisComponentId()+
+                " taskId->"+topologyContext.getThisTaskId()+" taskNum->"+taskNum+"-----");
     }
 
     public void execute(Tuple tuple) {

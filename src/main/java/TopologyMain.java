@@ -4,6 +4,7 @@ import bolts.WordNormalizer;
 import org.apache.storm.Config;
 import org.apache.storm.LocalCluster;
 import org.apache.storm.topology.TopologyBuilder;
+import org.apache.storm.trident.topology.TridentTopologyBuilder;
 import org.apache.storm.tuple.Fields;
 import org.apache.storm.utils.Utils;
 import spouts.WordReader;
@@ -44,6 +45,9 @@ public class TopologyMain{
         //TopologyBuilder提供流式风格的API来定义topology组件之间的数据流
         TopologyBuilder builder = new TopologyBuilder();
 
+        //支持事务的计算拓扑
+        //TridentTopologyBuilder builder1=new TridentTopologyBuilder();
+
         //注册一个sentence spout,设置两个Executeor(线程)，默认一个
         //这里如果把spout的并发度设为2，实际上就会有2个spout对象，相当于有两个数据源在发射数据，造成统计出来的结果都是2倍的
         builder.setSpout(SENTENCE_SPOUT_ID, spout,1);
@@ -57,6 +61,9 @@ public class TopologyMain{
         // 大多数情况下，我们应该保证上限>=下限
         // 但是如果某个新手程序员不知道这种约定，设成了下限 > 上限，那么实际创建executor时，数量与下限保持一致，不会多创建线程
         builder.setBolt(SPLIT_BOLT_ID, splitBolt,4).setNumTasks(2).shuffleGrouping(SENTENCE_SPOUT_ID);
+        //之前的想法错了，这里还是设置了几个numTasks，实际就会创建几个task对象，parallelism是多少，就会创建多少个executor
+        // 但是如果numTasks<parallelism_hint，则多出来的executor会空闲
+        builder.setBolt(SPLIT_BOLT_ID, splitBolt,2).setNumTasks(2).shuffleGrouping(SENTENCE_SPOUT_ID);
 
         // SplitSentenceBolt --> WordCountBolt
 
@@ -69,6 +76,8 @@ public class TopologyMain{
         builder.setBolt(COUNT_BOLT_ID, countBolt,4)
                 .fieldsGrouping(SPLIT_BOLT_ID, new Fields("word"))
                 .allGrouping(SENTENCE_SPOUT_ID, WordReader.SIGNAL);
+        //如果把拓扑看成一个树形结构，那么当storm创建拓扑结构节点的时候，是从最底层的孩子节点开始创建的，从他们的id就可以看出来
+        builder.setBolt(COUNT_BOLT_ID, countBolt,2).fieldsGrouping( SPLIT_BOLT_ID, new Fields("word"));
 
         // WordCountBolt --> ReportBolt
 

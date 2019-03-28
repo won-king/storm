@@ -42,7 +42,6 @@ public class WordReader extends BaseRichSpout {
     //这意味着，方法的一次执行，发送的其实是一批数据，这一批数据发射完成后，ack方法会被调用，确认每一个事务都完成了
     public void nextTuple() {
         //发射单词句子
-
         if(index>=sentences.length){
             //index=0;
             //System.out.println("------- data run out -------");
@@ -78,6 +77,7 @@ public class WordReader extends BaseRichSpout {
         //outputFieldsDeclarer.declare(new Fields("number"));
         //outputFieldsDeclarer.declare(new Fields("odd","even"));
         outputFieldsDeclarer.declareStream(SIGNAL, new Fields(SIGNAL));
+        //outputFieldsDeclarer.declareStream("signal", new Fields("stopped"));
         //outputFieldsDeclarer.declareStream("even",new Fields("number"));
         //outputFieldsDeclarer.declareStream("odd",new Fields("number"));
         //outputFieldsDeclarer.declareStream("signal", new Fields("stopped"));
